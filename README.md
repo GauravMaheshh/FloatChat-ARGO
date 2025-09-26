@@ -96,8 +96,8 @@ The easiest way to run PostgreSQL is with **Docker**.
 ```bash
 # Start the PostgreSQL service
 docker run --name argo-postgres -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=yourpassword -e POSTGRES_DB=argo_db -p 5432:5432 -d postgres
-Ensure the password and database name match your DATABASE_URL in the .env file.
 ```
+Ensure the password and database name match your DATABASE_URL in the .env file.
 Load the ARGO data into the database: This is a one-time step. This script creates the argo_profiles table and populates it from your CSV file.
 
 ```bash
