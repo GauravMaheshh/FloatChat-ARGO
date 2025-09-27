@@ -136,6 +136,13 @@ Your browser should open to the FloatChat application, ready to use.
 ## Repository Structure
 ```bash
 floatchat-sih/
+├── data
+    ├── August_Data_netCDF
+    ├── July_Data_netCDF
+    ├── September_Data_netCDF
+├── data_pipeline
+    ├── build_vector_index.py
+    ├── ingest_argo_to_postgres.py
 ├── public/
 ├── server/
 │   ├── .env              # Local environment variables (API keys, DB URL)
