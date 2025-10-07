@@ -22,15 +22,23 @@ FloatChat bridges this gap. It replaces cumbersome data analysis tools with a si
 
 FloatChat is built on a modern, decoupled three-tier architecture that correctly implements the **Model Context Protocol (MCP)** pattern. The system's intelligence lies in separating the reasoning engine from the tools it uses to act on the world.
 
+### 1. Data Pipeline (Python)
+The foundation of the project. This is a two-step process that transforms raw scientific data into a queryable format:
+- **Ingestion:** A Python script reads raw, multi-dimensional Argo NetCDF files, processes them, and stores the detailed, high-resolution measurement data in a PostgreSQL database.
+- **Indexing:** A second script reads the metadata from PostgreSQL, creates natural language summaries for each profile, and indexes them as vector embeddings in a ChromaDB vector database.
 
+### 2. Data Backend (The "Library")
+The system uses a dual-database strategy for efficient and intelligent data retrieval:
+- **PostgreSQL (The Bookshelf):** Acts as the primary "data warehouse," storing millions of rows of precise scientific measurements. It is the source of truth for generating factual answers.
+- **ChromaDB (The Smart Catalog):** Acts as a vector search index. It stores summaries of the data and allows the agent to perform fast, semantic searches to find the most relevant context for a user's question.
 
-### 1. React Frontend
+### 3. React Frontend
 The user's window into the system. This is a single-page application that provides the complete chat experience. It manages the conversation history and communicates with the backend API, sending the user's prompts and displaying the agent's final response and the generated SQL query.
 
-### 2. Node.js API Server
+### 4. Node.js API Server
 The central communication hub. This Express.js server acts as a session manager and a bridge between the frontend and the agent. It creates a unique session for each conversation, receives requests from the UI, and routes them to the correct agent instance.
 
-### 3. MCP Agent
+### 5. MCP Agent
 The "brain" of the operation. This is where the core AI logic resides. The agent is initialized with a powerful system prompt that gives it its persona, its knowledge of the database schema, and its primary directive: to use its `query_database` tool. It orchestrates the entire response process:
 - **Reason:** It analyzes the user's question and the conversation history.
 - **Act:** It generates a precise PostgreSQL query and calls its `query_database` tool.
@@ -41,9 +49,11 @@ The "brain" of the operation. This is where the core AI logic resides. The agent
 
 ## Key Features
 
+- **End-to-End Data Pipeline:** Ingests raw, scientific NetCDF data, processes it, and stores it in an optimized, queryable format.
 - **Natural Language to SQL Generation:** The agent's core capability. It dynamically writes and executes PostgreSQL queries to answer user questions, demonstrating a powerful application of LLMs in data analytics.
 - **MCP-Powered Agentic Workflow:** Implements a true agentic system where the LLM is not just processing text but is a reasoning engine that uses tools (`query_database`) to interact with a real-time data source.
 - **Conversational Memory:** Maintains a session-based chat history, allowing the agent to understand context and answer follow-up questions effectively.
+- **Dual-Database Architecture:** Combines the strengths of a relational database (PostgreSQL) for storing structured data and a vector database (ChromaDB) for fast semantic search.
 - **Robust PostgreSQL Backend:** Utilizes a powerful, scalable PostgreSQL database to store and serve the entire ARGO dataset, ensuring fast and accurate query execution.
 - **Interactive & Responsive UI:** A clean, modern chat interface built with React and `lucide-react` icons, providing an intuitive user experience.
 
@@ -53,10 +63,11 @@ The "brain" of the operation. This is where the core AI logic resides. The agent
 
 | Category | Tools Used |
 |---|---|
+| **Data Pipeline** | Python, xarray, pandas, SQLAlchemy, ChromaDB |
 | **Frontend** | React, Vite, CSS |
 | **Backend** | Node.js, Express.js |
 | **AI / Agent** | Google Gemini 1.5 Pro, `@google/generative-ai` SDK |
-| **Database** | PostgreSQL |
+| **Database** | PostgreSQL, ChromaDB |
 | **DevOps** | Docker |
 
 ---
@@ -64,6 +75,7 @@ The "brain" of the operation. This is where the core AI logic resides. The agent
 ## How to Run Locally
 
 ### Prerequisites
+- Python (v3.9+) & pip
 - Node.js (v18+)
 - Docker and Docker Compose
 - Git
@@ -124,6 +136,13 @@ Your browser should open to the FloatChat application, ready to use.
 ## Repository Structure
 ```bash
 floatchat-sih/
+├── data
+    ├── August_Data_netCDF
+    ├── July_Data_netCDF
+    ├── September_Data_netCDF
+├── data_pipeline
+    ├── build_vector_index.py
+    ├── ingest_argo_to_postgres.py
 ├── public/
 ├── server/
 │   ├── .env              # Local environment variables (API keys, DB URL)
@@ -141,3 +160,4 @@ floatchat-sih/
 └── README.md
 ```
 By [Gaurav Mahesh](https://github.com/GauravMaheshh)
+   [Bharat Kameswaran](https://github.com/BharatK0049)
