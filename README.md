@@ -158,6 +158,3 @@ floatchat-sih/
 ├── .gitignore
 ├── package.json
 └── README.md
-```
-By [Gaurav Mahesh](https://github.com/GauravMaheshh)
-   [Bharat Kameswaran](https://github.com/BharatK0049)
