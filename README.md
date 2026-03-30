@@ -6,7 +6,7 @@
 [![Google Gemini](https://img.shields.io/badge/Google_Gemini-1.5_Pro-purple?style=for-the-badge&logo=google-gemini)](https://ai.google.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 
-**FloatChat** is a sophisticated, AI-powered conversational agent that transforms how users interact with complex oceanographic data. This project provides a natural language interface to the vast ARGO dataset, allowing non-technical users to ask complex questions and receive precise, data-driven answers by leveraging a powerful AI agent that generates and executes SQL queries in real-time.
+**FloatChat** is a sophisticated, AI-powered conversational agent that transforms how users interact with complex oceanographic data. This project provides a natural language interface to the vast ARGO dataset, allowing non-technical users to ask complex questions and receive precise, data-driven answers by leveraging a powerful AI agent that generates and executes SQL queries in real-time
 
 ---
 
