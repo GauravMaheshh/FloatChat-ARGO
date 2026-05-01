@@ -1,9 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
-const fs = require('fs');
-const path = require('path');
-const csv = require('csv-parser');
+const { Pool } = require('pg');
 const { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } = require('@google/generative-ai');
 
 const app = express();
@@ -12,73 +10,42 @@ const PORT = 3001;
 app.use(cors());
 app.use(express.json());
 
-// --- Global variable to hold our entire dataset in memory ---
-let argoData = [];
+app.get('/', (req, res) => {
+    res.send('FloatChat-ARGO API is running. The chat endpoint is at POST /api/chat-argo');
+});
 
-// --- Function to load the entire CSV into memory on startup ---
-const loadArgoData = () => {
-    return new Promise((resolve, reject) => {
-        const results = [];
-        const csvPath = path.join(__dirname, 'argo_data.csv');
-        fs.createReadStream(csvPath)
-            .pipe(csv())
-            .on('data', (data) => results.push(data))
-            .on('end', () => {
-                argoData = results;
-                console.log(`✅ Successfully loaded ${argoData.length} rows from argo_data.csv`);
-                resolve();
-            })
-            .on('error', (error) => reject(error));
-    });
-};
+// --- Database Setup ---
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+});
+
+pool.on('error', (err, client) => {
+    console.error('Unexpected error on idle client', err);
+    process.exit(-1);
+});
 
 // --- The Tool the Agent Can Use ---
-const query_csv_data = ({ filters, aggregation }) => {
-    console.log("Executing tool: query_csv_data with args:", { filters, aggregation });
-
-    let filteredData = argoData;
-    // Apply filters if they exist
-    if (filters && filters.length > 0) {
-        filteredData = argoData.filter(row => {
-            return filters.every(condition => {
-                // Basic filtering logic
-                const rowValue = parseFloat(row[condition.column]);
-                const conditionValue = parseFloat(condition.value);
-                 switch (condition.operator) {
-                    case 'equals': return row[condition.column] == condition.value;
-                    case 'greater_than': return !isNaN(rowValue) && !isNaN(conditionValue) && rowValue > conditionValue;
-                    case 'less_than': return !isNaN(rowValue) && !isNaN(conditionValue) && rowValue < conditionValue;
-                    default: return true;
-                }
-            });
-        });
+const query_database = async ({ sql_query }) => {
+    console.log("Executing tool: query_database with SQL:", sql_query);
+    
+    // VERY BASIC SECURITY: Prevent destructive queries
+    const upperQuery = sql_query.toUpperCase();
+    if (upperQuery.includes("DROP ") || upperQuery.includes("DELETE ") || upperQuery.includes("UPDATE ") || upperQuery.includes("INSERT ")) {
+        return { error: "Permission Denied: Only SELECT queries are allowed." };
     }
 
-    // Apply aggregation if requested
-    if (aggregation && aggregation.type && aggregation.column) {
-        if (filteredData.length === 0) {
-            return { result: `No data found to aggregate for column ${aggregation.column}` };
+    try {
+        const client = await pool.connect();
+        try {
+            const res = await client.query(sql_query);
+            return { result: res.rows };
+        } finally {
+            client.release();
         }
-        const values = filteredData.map(row => parseFloat(row[aggregation.column])).filter(v => !isNaN(v));
-        let result;
-        switch (aggregation.type) {
-            case 'average':
-                result = values.reduce((a, b) => a + b, 0) / values.length;
-                break;
-            case 'sum':
-                result = values.reduce((a, b) => a + b, 0);
-                break;
-            case 'count':
-                result = values.length;
-                break;
-            default:
-                return { result: `Unknown aggregation type: ${aggregation.type}` };
-        }
-        return { result: result.toFixed(2) };
+    } catch (err) {
+        console.error("Database query error:", err.message);
+        return { error: "Failed to execute query: " + err.message };
     }
-
-    // If no aggregation, return a sample of the filtered data
-    return { data_sample: filteredData.slice(0, 50) };
 };
 
 // --- Agent Setup ---
@@ -87,57 +54,70 @@ const tools = [
     {
         functionDeclarations: [
             {
-                name: "query_csv_data",
-                description: "Queries the Argo oceanographic CSV data. Use this for any questions about temperatures, salinity, locations, or float data.",
+                name: "query_database",
+                description: "Executes a SQL SELECT query against the PostgreSQL database to answer user questions about the Argo oceanographic data. Always return limited rows (LIMIT 50) unless doing aggregations.",
                 parameters: {
                     type: "OBJECT",
                     properties: {
-                        filters: {
-                            type: "ARRAY",
-                            description: "An array of filter conditions to apply to the data.",
-                            items: {
-                                type: "OBJECT",
-                                properties: {
-                                    column: { type: "STRING", description: "The CSV column to filter on." },
-                                    operator: { type: "STRING", enum: ["equals", "greater_than", "less_than"] },
-                                    value: { type: "STRING", description: "The value to compare against." }
-                                }
-                            }
-                        },
-                        aggregation: {
-                            type: "OBJECT",
-                            description: "Perform an aggregation on the filtered data. e.g., average, sum, count.",
-                            properties: {
-                                type: { type: "STRING", enum: ["average", "sum", "count"] },
-                                column: { type: "STRING", description: "The column to aggregate." }
-                            }
+                        sql_query: {
+                            type: "STRING",
+                            description: "The raw SQL SELECT query to execute. Example: SELECT AVG(\"TEMP\") FROM argo_profiles WHERE \"PSAL\" > 35"
                         }
                     },
-                    required: []
+                    required: ["sql_query"]
                 }
             }
         ]
     }
 ];
 
+const systemInstruction = `You are a helpful AI assistant that answers questions about oceanographic data using a PostgreSQL database.
+The database has a single table named "argo_profiles" with the following schema:
+- "float_id" (VARCHAR): The ID of the Argo float
+- "timestamp" (TIMESTAMP): Time of the measurement
+- "latitude" (NUMERIC): Latitude
+- "longitude" (NUMERIC): Longitude
+- "pressure" (NUMERIC): Pressure (dbar)
+- "temperature" (NUMERIC): Temperature (Celsius)
+- "salinity" (NUMERIC): Salinity (PSU)
+
+Your primary job is to formulate valid PostgreSQL SELECT queries based on the user's question, execute them using the 'query_database' tool, and use the data returned to provide a natural language response. Always wrap column names in double quotes.`;
+
 const model = genAI.getGenerativeModel({
-    model: "gemini-1.5-flash-latest",
+    model: "gemini-2.5-flash",
     tools: tools,
+    systemInstruction: systemInstruction,
 });
 
+// Map to store active chat sessions in memory
+const activeChats = new Map();
 
 // --- API Endpoint ---
 app.post('/api/chat-argo', async (req, res) => {
-    const { prompt } = req.body;
+    const { prompt, sessionId } = req.body;
+
+    if (!sessionId) {
+        return res.status(400).json({ error: "Missing sessionId" });
+    }
 
     try {
-        const chat = model.startChat();
+        let chat;
+        // Retrieve existing session or create a new one
+        if (activeChats.has(sessionId)) {
+            chat = activeChats.get(sessionId);
+            console.log(`Resuming chat session: ${sessionId}`);
+        } else {
+            chat = model.startChat();
+            activeChats.set(sessionId, chat);
+            console.log(`Created new chat session: ${sessionId}`);
+        }
+
+        let executedToolsData = [];
         let result = await chat.sendMessage(prompt);
 
         // Loop to handle potential multi-turn tool calls
         while (true) {
             const response = result.response;
-            // Correctly call the functionCalls() method to get the array
             const calls = response.functionCalls();
 
             // If there are no function calls, the agent is done, so break the loop
@@ -149,11 +129,23 @@ app.post('/api/chat-argo', async (req, res) => {
 
             const toolResults = [];
             for (const call of calls) {
-                if (call.name === "query_csv_data") {
-                    const toolResult = query_csv_data(call.args);
+                if (call.name === "query_database") {
+                    const toolResult = await query_database(call.args);
+                    
+                    executedToolsData.push({
+                        sql: call.args.sql_query,
+                        data: toolResult.result
+                    });
+
+                    const truncatedData = {
+                        rowCount: toolResult.result ? toolResult.result.length : 0,
+                        firstFewRows: toolResult.result ? toolResult.result.slice(0, 3) : [],
+                        note: "The full dataset has been sent to the user's UI map. Do NOT list rows in your response. Just summarize."
+                    };
+
                     toolResults.push({
-                        functionName: "query_csv_data",
-                        response: { name: "query_csv_data", content: toolResult }
+                        functionName: "query_database",
+                        response: { name: "query_database", content: truncatedData }
                     });
                 }
             }
@@ -164,7 +156,7 @@ app.post('/api/chat-argo', async (req, res) => {
 
         // The final response after all tool calls are handled
         const finalAnswer = result.response.text();
-        res.json({ response: finalAnswer });
+        res.json({ response: finalAnswer, toolsData: executedToolsData });
 
     } catch (error) {
         console.error("Server Error:", error);
@@ -173,14 +165,51 @@ app.post('/api/chat-argo', async (req, res) => {
 });
 
 
-// --- Start Server ---
-app.listen(PORT, async () => {
+// --- Initial Map Data Endpoint ---
+app.get('/api/initial-map', async (req, res) => {
     try {
-        await loadArgoData();
-        console.log(`MCP Agent Server running on http://localhost:${PORT}`);
-    } catch (error) {
-        console.error("Failed to load CSV data on startup:", error);
-        process.exit(1);
+        const client = await pool.connect();
+        try {
+            const query = `
+                SELECT DISTINCT ON (float_id) float_id, latitude, longitude 
+                FROM argo_profiles 
+                ORDER BY float_id, timestamp ASC 
+                LIMIT 100
+            `;
+            const dbRes = await client.query(query);
+            res.json({ data: dbRes.rows });
+        } finally {
+            client.release();
+        }
+    } catch (err) {
+        console.error("Initial map query error:", err.message);
+        res.status(500).json({ error: "Failed to fetch initial map data" });
+    }
+});
+app.get('/api/trajectory/:floatId', async (req, res) => {
+    const floatId = req.params.floatId;
+    try {
+        const client = await pool.connect();
+        try {
+            const query = `
+                SELECT * 
+                FROM argo_profiles 
+                WHERE float_id = $1 
+                ORDER BY timestamp ASC 
+                LIMIT 500
+            `;
+            const dbRes = await client.query(query, [floatId]);
+            res.json({ data: dbRes.rows });
+        } finally {
+            client.release();
+        }
+    } catch (err) {
+        console.error("Trajectory query error:", err.message);
+        res.status(500).json({ error: "Failed to fetch trajectory data" });
     }
 });
 
+app.listen(PORT, () => {
+    console.log(`MCP Agent Server running on http://localhost:${PORT}`);
+    console.log("Connected to PostgreSQL using environment DATABASE_URL");
+});

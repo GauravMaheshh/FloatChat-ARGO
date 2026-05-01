@@ -1,160 +1,80 @@
-# FloatChat - AI-Powered Conversational Interface for ARGO Ocean Data
+# FloatChat-ARGO: Enterprise Oceanographic Dashboard & Agent
 
 [![React](https://img.shields.io/badge/React-18%2B-blue?style=for-the-badge&logo=react)](https://reactjs.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-20%2B-green?style=for-the-badge&logo=nodedotjs)](https://nodejs.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14%2B-blue?style=for-the-badge&logo=postgresql)](https://www.postgresql.org/)
-[![Google Gemini](https://img.shields.io/badge/Google_Gemini-1.5_Pro-purple?style=for-the-badge&logo=google-gemini)](https://ai.google.dev/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
+[![Google Gemini](https://img.shields.io/badge/Google_Gemini-1.5_Flash-purple?style=for-the-badge&logo=google-gemini)](https://ai.google.dev/)
+[![Leaflet](https://img.shields.io/badge/Leaflet-1.9-lightgreen?style=for-the-badge&logo=leaflet)](https://leafletjs.com/)
 
-**FloatChat** is a sophisticated, AI-powered conversational agent that transforms how users interact with complex oceanographic data. This project provides a natural language interface to the vast ARGO dataset, allowing non-technical users to ask complex questions and receive precise, data-driven answers by leveraging a powerful AI agent that generates and executes SQL queries in real-time
-
----
-
-## Project Overview
-
-Oceanographic data, particularly from the global ARGO float program, is a cornerstone of climate and marine science. However, this data is often stored in complex formats like NetCDF and requires specialized knowledge and tools to access, query, and visualize. This creates a significant barrier for researchers, students, and policymakers who need to derive insights quickly.
-
-FloatChat bridges this gap. It replaces cumbersome data analysis tools with a simple, intuitive chat interface. Users can ask questions like *"What is the average salinity for float 2901300?"* or *"Show me the path of floats in the Arabian Sea with a temperature above 25 degrees."* The system understands the user's intent, interacts with a database, and provides a clear, concise answer, fundamentally democratizing access to vital scientific data.
+**FloatChat-ARGO** is a production-grade analytical dashboard and AI-powered conversational agent. It transforms the way researchers interact with complex, high-resolution ARGO oceanographic data by combining standard interactive map visualizations with an agentic LLM capable of generating and executing complex SQL queries in real-time.
 
 ---
 
-## Solution Architecture
+## Architecture & Core Achievements
 
-FloatChat is built on a modern, decoupled three-tier architecture that correctly implements the **Model Context Protocol (MCP)** pattern. The system's intelligence lies in separating the reasoning engine from the tools it uses to act on the world.
+### 1. Robust Data Pipeline
+- **Multi-Month NetCDF Ingestion:** Python scripts recursively scan and process multiple months of raw, complex NetCDF files, extracting profiles and flattening them into a structured database format.
+- **Optimized PostgreSQL Backend:** The database is designed for scale, utilizing standardized `snake_case` schema and specialized **B-Tree Indexing** on `float_id` and `timestamp` fields. This ensures lightning-fast queries even across datasets spanning millions of rows.
 
-### 1. Data Pipeline (Python)
-The foundation of the project. This is a two-step process that transforms raw scientific data into a queryable format:
-- **Ingestion:** A Python script reads raw, multi-dimensional Argo NetCDF files, processes them, and stores the detailed, high-resolution measurement data in a PostgreSQL database.
-- **Indexing:** A second script reads the metadata from PostgreSQL, creates natural language summaries for each profile, and indexes them as vector embeddings in a ChromaDB vector database.
+### 2. Generative UI & Dashboard
+- **Dynamic Visualizations:** The frontend intelligently infers the type of data returned by the backend. It dynamically renders:
+  - **Trajectory Maps:** Traces float paths chronologically across the globe using React Leaflet, complete with timeline scrubbing.
+  - **Scatter Profiles:** Plots vertical water profiles (Temperature vs. Pressure) using Recharts.
+- **Utilitarian Design:** A clean, professional dual-pane interface combining a persistent "Fleet Directory" on the left and a dedicated high-visibility data visualization canvas on the right.
 
-### 2. Data Backend (The "Library")
-The system uses a dual-database strategy for efficient and intelligent data retrieval:
-- **PostgreSQL (The Bookshelf):** Acts as the primary "data warehouse," storing millions of rows of precise scientific measurements. It is the source of truth for generating factual answers.
-- **ChromaDB (The Smart Catalog):** Acts as a vector search index. It stores summaries of the data and allows the agent to perform fast, semantic searches to find the most relevant context for a user's question.
-
-### 3. React Frontend
-The user's window into the system. This is a single-page application that provides the complete chat experience. It manages the conversation history and communicates with the backend API, sending the user's prompts and displaying the agent's final response and the generated SQL query.
-
-### 4. Node.js API Server
-The central communication hub. This Express.js server acts as a session manager and a bridge between the frontend and the agent. It creates a unique session for each conversation, receives requests from the UI, and routes them to the correct agent instance.
-
-### 5. MCP Agent
-The "brain" of the operation. This is where the core AI logic resides. The agent is initialized with a powerful system prompt that gives it its persona, its knowledge of the database schema, and its primary directive: to use its `query_database` tool. It orchestrates the entire response process:
-- **Reason:** It analyzes the user's question and the conversation history.
-- **Act:** It generates a precise PostgreSQL query and calls its `query_database` tool.
-- **Observe:** It receives the data from the database.
-- **Respond:** It formulates a final, human-readable answer based on the observed data.
-
----
-
-## Key Features
-
-- **End-to-End Data Pipeline:** Ingests raw, scientific NetCDF data, processes it, and stores it in an optimized, queryable format.
-- **Natural Language to SQL Generation:** The agent's core capability. It dynamically writes and executes PostgreSQL queries to answer user questions, demonstrating a powerful application of LLMs in data analytics.
-- **MCP-Powered Agentic Workflow:** Implements a true agentic system where the LLM is not just processing text but is a reasoning engine that uses tools (`query_database`) to interact with a real-time data source.
-- **Conversational Memory:** Maintains a session-based chat history, allowing the agent to understand context and answer follow-up questions effectively.
-- **Dual-Database Architecture:** Combines the strengths of a relational database (PostgreSQL) for storing structured data and a vector database (ChromaDB) for fast semantic search.
-- **Robust PostgreSQL Backend:** Utilizes a powerful, scalable PostgreSQL database to store and serve the entire ARGO dataset, ensuring fast and accurate query execution.
-- **Interactive & Responsive UI:** A clean, modern chat interface built with React and `lucide-react` icons, providing an intuitive user experience.
+### 3. Token-Optimized Hybrid AI
+- **Context Management:** The agent avoids context-window exhaustion by strictly returning decoupled data payloads. The AI only receives a truncated summary of SQL queries (saving massive amounts of tokens), while the React frontend directly receives the full raw dataset for rendering.
+- **Hybrid API Bypass:** To conserve strict API quotas, standard dashboard interactions (like clicking a float in the directory to see its trajectory) bypass the LLM entirely, relying on direct REST endpoints to ensure 100% uptime and zero token burn.
+- **Transparent Execution:** Every AI-generated visualization includes an expandable view of the raw SQL executed against the database, ensuring absolute data transparency.
 
 ---
 
 ## Technical Stack
 
-| Category | Tools Used |
+| Category | Technology |
 |---|---|
-| **Data Pipeline** | Python, xarray, pandas, SQLAlchemy, ChromaDB |
-| **Frontend** | React, Vite, CSS |
-| **Backend** | Node.js, Express.js |
-| **AI / Agent** | Google Gemini 1.5 Pro, `@google/generative-ai` SDK |
-| **Database** | PostgreSQL, ChromaDB |
-| **DevOps** | Docker |
+| **Data Pipeline** | Python, `xarray`, `netCDF4`, `psycopg2` |
+| **Frontend** | React, Vite, Recharts, React Leaflet (`CartoDB Dark Matter`) |
+| **Backend** | Node.js, Express.js, `pg` |
+| **Intelligence** | Google Gemini 2.5 Flash, `@google/generative-ai` SDK |
+| **Database** | PostgreSQL |
 
 ---
 
-## How to Run Locally
+## Quickstart
 
 ### Prerequisites
-- Python (v3.9+) & pip
 - Node.js (v18+)
-- Docker and Docker Compose
-- Git
+- Python (v3.9+) & pip
+- PostgreSQL Database
 
-### 1. Setup
-**Clone the repository and install dependencies:**
-```bash
-git clone [YOUR_REPOSITORY_URL]
-cd floatchat
-
-# Install frontend dependencies
-npm install
-
-# Install backend dependencies
-cd server
-npm install
-cd ..
-```
-
-### 2. Configure Environment
-In the server/ directory, create a .env file from the example:
+### 1. Environment & Database Setup
+Initialize your PostgreSQL database and add your configuration and Google Gemini API key to `server/.env`.
 ```bash
 cp server/.env.example server/.env
 ```
-Now, edit server/.env and add your Google Gemini API Key and your PostgreSQL Database URL.
 
-### 3. Start and Populate the Database
-The easiest way to run PostgreSQL is with **Docker**.
-
+### 2. Run Data Pipeline
+Place your NetCDF data into the `/data` directory, then ingest it into PostgreSQL:
 ```bash
-# Start the PostgreSQL service
-docker run --name argo-postgres -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=yourpassword -e POSTGRES_DB=argo_db -p 5432:5432 -d postgres
+python data_pipeline/ingest_argo_to_postgres.py
 ```
-Ensure the password and database name match your DATABASE_URL in the .env file.
-Load the ARGO data into the database: This is a one-time step. This script creates the argo_profiles table and populates it from your CSV file.
 
-```bash
-node server/load-data.js
-```
-### 4. Run the Application
+### 3. Start the Platform
+FloatChat requires a dual-server development environment.
 
-Terminal 1: Start the Backend API Server
-
+**Start the Backend (Terminal 1):**
 ```bash
 cd server
+npm install
 npm run dev
 ```
-The MCP Agent API Server should now be running on http://localhost:3001.
 
-Terminal 2: Start the React Frontend
-
+**Start the Frontend (Terminal 2):**
 ```bash
-# From the root project directory
+# From the project root
+npm install
 npm run dev
 ```
-Your browser should open to the FloatChat application, ready to use.
 
-## Repository Structure
-```bash
-floatchat-sih/
-├── data
-    ├── August_Data_netCDF
-    ├── July_Data_netCDF
-    ├── September_Data_netCDF
-├── data_pipeline
-    ├── build_vector_index.py
-    ├── ingest_argo_to_postgres.py
-├── public/
-├── server/
-│   ├── .env              # Local environment variables (API keys, DB URL)
-│   ├── agent.js          # The core MCP agent logic (The Brain)
-│   ├── api.js            # The Express.js API server (The Web Server)
-│   ├── load-data.js      # One-time script to populate PostgreSQL
-│   ├── argo_data.csv     # The raw data source
-│   └── package.json
-├── src/
-│   ├── App.jsx
-│   ├── Gemini.jsx
-│   └── index.css
-├── .gitignore
-├── package.json
-└── README.md
+The application will be available at `http://localhost:5173`.
